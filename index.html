@@ -262,8 +262,6 @@
             name: "Windows",
             href: "./downloads/AIInterviewHelperSetup.exe",
             download: "AIInterviewHelperSetup.exe",
-            checksum: "d1d5732e30e495f4745c450009f88c957667c639aaef5abfe73e127b8d2ac22f",
-            detail: "Windows installer · adds a Start Menu shortcut",
             icon: (
               <svg aria-hidden="true" className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M3 4.2 10.4 3v8H3V4.2Zm8.5-1.35L21 1.5V11h-9.5V2.85ZM3 12.2h7.4v8L3 19V12.2Zm8.5 0H21v9.5l-9.5-1.35V12.2Z" />
@@ -274,8 +272,6 @@
             name: "macOS",
             href: "./downloads/LightningAssistant-macOS-Portable.zip",
             download: "LightningAssistant-macOS-Portable.zip",
-            checksum: "2167683889bab23dd4669545a94d2ccbe38da776bdc19ff33449d93748c6a50f",
-            detail: "ZIP · Unsigned portable build",
             icon: (
               <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
                 <path d="M12 7c1.3-1.5 2.8-2.2 4.2-2.2 2 0 3.8 1.4 4.7 3.4-2.5 1.4-3 5.2-.5 7.1-.7 2-1.8 4.1-3.5 4.1-1 0-1.7-.7-3-.7s-2 .7-3 .7c-2.3 0-5.3-5.5-5.3-9.4 0-3.1 2-5.2 4.4-5.2 1 0 2 .4 2.6.9Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
@@ -304,28 +300,10 @@
                   {build.icon}
                   <span>
                     <span className="block">Download for {build.name}</span>
-                    <span className="mt-1 block text-xs text-gray-500">{build.detail}</span>
                   </span>
                 </a>
               ))}
             </div>
-            <p className="mt-5 text-center text-xs leading-5 text-amber-200/80">
-              These builds are not code-signed. Windows SmartScreen or macOS security
-              may warn about them. Only run software from a source you trust.
-            </p>
-            <details className="mx-auto mt-4 max-w-xl text-xs text-gray-500">
-              <summary className="cursor-pointer text-center hover:text-gray-300">
-                Verify download checksums (SHA-256)
-              </summary>
-              <dl className="mt-3 space-y-3 break-all rounded-xl border border-white/10 bg-white/[0.025] p-4">
-                {builds.map((build) => (
-                  <div key={build.name}>
-                    <dt className="font-medium text-gray-300">{build.name}</dt>
-                    <dd className="mt-1 font-mono">{build.checksum}</dd>
-                  </div>
-                ))}
-              </dl>
-            </details>
           </div>
         );
       }
