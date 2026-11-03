@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "@dodopayments/opencode-plugin": "^0.7.0"
+  }
+}

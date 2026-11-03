@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: assistant-backend
+    runtime: node
+    rootDir: stealth-backend/stealth-backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DODO_PAYMENTS_API_KEY
+        sync: false
+      - key: DODO_PAYMENTS_WEBHOOK_KEY
+        sync: false
+      - key: DODO_PAYMENTS_ENVIRONMENT
+        value: test_mode
+      - key: DODO_PRODUCT_ID
+        sync: false
+      - key: DODO_RETURN_URL
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: APP_ALLOWED_ORIGINS
+        sync: false

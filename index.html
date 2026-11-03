@@ -1,0 +1,1392 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Lightning AI brings intelligent answers, study tools, mock interview practice, and speech transcription together. Explore Lightning Plus or the separate trainable model."
+    />
+    <title>Lightning AI — Your AI study and interview partner</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%237dd3fc' d='M37 3 10 36h18l-3 25 29-39H35z'/%3E%3C/svg%3E"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+              serif: ["Iowan Old Style", "Baskerville", "serif"],
+            },
+            keyframes: {
+              marquee: {
+                from: { transform: "translateX(0)" },
+                to: { transform: "translateX(-50%)" },
+              },
+            },
+            animation: {
+              marquee: "marquee 36s linear infinite",
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html {
+        scroll-behavior: smooth;
+        background: #000;
+        scroll-padding-top: 88px;
+      }
+
+      body {
+        min-width: 0;
+        margin: 0;
+        background: #000;
+        color: #fff;
+        font-family: "DM Sans", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      ::selection {
+        background: rgba(255, 255, 255, 0.24);
+      }
+
+      .hero-video {
+        object-position: center 46%;
+      }
+
+      .video-mockup {
+        isolation: isolate;
+      }
+
+      .video-mockup::after {
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.38);
+        content: "";
+      }
+
+      .marquee-mask {
+        mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+      }
+
+      .marquee-track:hover {
+        animation-play-state: paused;
+      }
+
+      .wave-bar {
+        width: 3px;
+        flex: 0 0 3px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.8);
+      }
+
+      .faq-answer {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 300ms ease;
+      }
+
+      .faq-answer[data-open="true"] {
+        grid-template-rows: 1fr;
+      }
+
+      .faq-answer > div {
+        overflow: hidden;
+      }
+
+      .faq-plus {
+        transition: transform 300ms ease;
+      }
+
+      .faq-plus[data-open="true"] {
+        transform: rotate(45deg);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" data-presets="env,react">
+      const { useEffect, useRef, useState } = React;
+
+      const HERO_VIDEO =
+        "https://cdn.sceneai.art/Hero%20Section%20Video/50b4f304-cdca-4e12-8735-580d225834be.mp4";
+
+      function LogoMark({ className = "h-8 w-8" }) {
+        const [logoUnavailable, setLogoUnavailable] = useState(false);
+
+        if (logoUnavailable) {
+          return (
+            <svg
+              className={`logo-mark ${className}`}
+              viewBox="0 0 64 64"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M37 3 10 36h18l-3 25 29-39H35z"
+                fill="#7dd3fc"
+                stroke="white"
+                strokeOpacity=".75"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+            </svg>
+          );
+        }
+
+        return (
+          <img
+            className={`logo-mark ${className}`}
+            src="./logo-to-svg-converter.svg"
+            alt=""
+            aria-hidden="true"
+            draggable="false"
+            onError={() => setLogoUnavailable(true)}
+          />
+        );
+      }
+
+      function BrandName() {
+        return (
+          <span
+            aria-label="Lightning"
+            className="text-xl font-bold leading-none tracking-[-0.055em]"
+          >
+            lightning
+          </span>
+        );
+      }
+
+      function Icon({ name, className = "h-5 w-5" }) {
+        const shared = {
+          className,
+          fill: "none",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: 1.7,
+          viewBox: "0 0 24 24",
+          "aria-hidden": true,
+        };
+        const paths = {
+          arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
+          menu: <><path d="M4 7h16" /><path d="M4 17h16" /></>,
+          close: <><path d="m6 6 12 12" /><path d="M18 6 6 18" /></>,
+          mic: <><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3m-4 0h8" /></>,
+          sound: <><path d="M2 10v4m4-8v12m4-16v20m4-14v8m4-11v14m4-9v4" /></>,
+          play: <><path d="m9 6 10 6-10 6V6Z" fill="currentColor" stroke="none" /></>,
+        };
+        return <svg {...shared}>{paths[name]}</svg>;
+      }
+
+      function FadeInUp({ children, className = "", delay = 0 }) {
+        const element = useRef(null);
+        const [visible, setVisible] = useState(false);
+
+        useEffect(() => {
+          if (!element.current) return undefined;
+
+          if (!("IntersectionObserver" in window)) {
+            setVisible(true);
+            return undefined;
+          }
+
+          const observer = new IntersectionObserver(
+            ([entry]) => {
+              if (!entry.isIntersecting) return;
+              setVisible(true);
+              observer.disconnect();
+            },
+            { threshold: 0.12 }
+          );
+          observer.observe(element.current);
+          return () => observer.disconnect();
+        }, []);
+
+        return (
+          <div
+            ref={element}
+            className={`transform transition-all duration-1000 ease-out ${
+              visible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"
+            } ${className}`}
+            style={{ transitionDelay: `${delay}ms` }}
+          >
+            {children}
+          </div>
+        );
+      }
+
+      function DesktopDownloads() {
+        return (
+          <div className="mx-auto mt-20 w-full max-w-2xl">
+            <p className="text-center text-sm font-medium text-gray-300">
+              Get Lightning AI for desktop
+            </p>
+            <p className="mt-2 text-center text-sm text-gray-500">
+              Download the desktop app for Windows.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button
+                aria-describedby="desktop-download-status"
+                className="inline-flex min-h-12 cursor-not-allowed items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-5 text-left text-sm text-gray-300 opacity-75"
+                disabled
+                type="button"
+              >
+                <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M8 21h8m-4-4v4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+                </svg>
+                <span>Download for macOS <span className="text-gray-500">· Coming soon</span></span>
+              </button>
+              <a
+                className="inline-flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-5 text-left text-sm text-gray-300 transition-colors hover:border-white/25 hover:bg-white/10 hover:text-white"
+                href="./dist/VoiceAssistantSetup.exe"
+                download="VoiceAssistantSetup.exe"
+              >
+                <svg aria-hidden="true" className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M3 4.2 10.4 3v8H3V4.2Zm8.5-1.35L21 1.5V11h-9.5V2.85ZM3 12.2h7.4v8L3 19V12.2Zm8.5 0H21v9.5l-9.5-1.35V12.2Z" />
+                </svg>
+                <span>Download for Windows</span>
+              </a>
+            </div>
+            <span className="sr-only" id="desktop-download-status">
+              The macOS desktop app is coming soon.
+            </span>
+          </div>
+        );
+      }
+
+      function ActionLink({ children, href = "#contact", secondary = false }) {
+        return (
+          <a
+            className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium transition-colors ${
+              secondary
+                ? "border border-white/5 bg-[#1F1F22] text-white hover:bg-[#2A2A2D]"
+                : "bg-white text-black hover:bg-gray-200"
+            }`}
+            href={href}
+          >
+            {children}
+            <Icon name="arrow" className="h-4 w-4" />
+          </a>
+        );
+      }
+
+      function Navigation() {
+        const [scrolled, setScrolled] = useState(false);
+        const [menuOpen, setMenuOpen] = useState(false);
+        const links = [
+          ["About", "#about"],
+          ["Features", "#features"],
+          ["Pricing", "#pricing"],
+          ["FAQ", "#faq"],
+          ["Contact", "#contact"],
+        ];
+
+        useEffect(() => {
+          const handleScroll = () => setScrolled(window.scrollY > 20);
+          handleScroll();
+          window.addEventListener("scroll", handleScroll, { passive: true });
+          return () => window.removeEventListener("scroll", handleScroll);
+        }, []);
+
+        function closeMenu() {
+          setMenuOpen(false);
+        }
+
+        return (
+          <nav
+            aria-label="Main navigation"
+            className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
+              scrolled ? "bg-black/80 backdrop-blur-md" : "bg-transparent"
+            }`}
+          >
+            <div className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-6">
+              <a
+                aria-label="Lightning home"
+                className="flex items-center gap-1 text-white"
+                href="#about"
+                onClick={closeMenu}
+              >
+                <LogoMark />
+                <BrandName />
+              </a>
+              <div className="hidden items-center gap-9 md:flex">
+                {links.map(([label, href]) => (
+                  <a
+                    key={label}
+                    className="text-sm font-medium text-gray-300 transition-colors hover:text-white"
+                    href={href}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+              <div className="hidden md:block">
+                <ActionLink href="#pricing" secondary>
+                  Get started
+                </ActionLink>
+              </div>
+              <button
+                aria-expanded={menuOpen}
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white md:hidden"
+                onClick={() => setMenuOpen((open) => !open)}
+                type="button"
+              >
+                <Icon name={menuOpen ? "close" : "menu"} />
+              </button>
+            </div>
+            <div
+              className={`grid overflow-hidden border-white/10 bg-black/95 px-6 transition-all duration-300 md:hidden ${
+                menuOpen
+                  ? "max-h-80 border-t py-3 opacity-100"
+                  : "max-h-0 border-t-0 py-0 opacity-0"
+              }`}
+            >
+              {links.map(([label, href]) => (
+                <a
+                  key={label}
+                  className="py-3 text-sm font-medium text-gray-300 transition-colors hover:text-white"
+                  href={href}
+                  onClick={closeMenu}
+                  tabIndex={menuOpen ? 0 : -1}
+                >
+                  {label}
+                </a>
+              ))}
+              <a
+                className="mt-2 inline-flex min-h-11 items-center justify-center rounded-full bg-white px-5 text-sm font-medium text-black"
+                href="#pricing"
+                onClick={closeMenu}
+                tabIndex={menuOpen ? 0 : -1}
+              >
+                Get started
+              </a>
+            </div>
+          </nav>
+        );
+      }
+
+      function Hero() {
+        return (
+          <section
+            className="relative z-0 flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 pb-20 pt-32"
+            id="about"
+          >
+            <video
+              aria-hidden="true"
+              autoPlay
+              className="hero-video absolute inset-0 -z-10 min-h-full min-w-full object-cover opacity-90"
+              loop
+              muted
+              playsInline
+              src={HERO_VIDEO}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 -z-10 bg-gradient-to-b from-black/30 via-black/15 to-black"
+            />
+            <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center text-center">
+              <FadeInUp>
+                <span className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-300 backdrop-blur-sm">
+                  <span aria-hidden="true" className="mr-2">✨</span>
+                  Announcing Lightning API 2.0 &amp; Stealth 2.0
+                </span>
+              </FadeInUp>
+              <FadeInUp delay={100}>
+                <h1 className="mb-6 text-center text-5xl font-medium tracking-tight text-white md:text-7xl">
+                  The intelligence layer
+                  <br className="hidden sm:block" /> for the{" "}
+                  <span className="font-serif font-normal italic">interview.</span>
+                </h1>
+              </FadeInUp>
+              <FadeInUp delay={180}>
+                <p className="max-w-2xl text-center text-[16px] leading-7 text-gray-400">
+                  Meet Lightning AI: an AI chat assistant for clear answers,
+                  learning, and mock interview practice, plus speech
+                  transcription and a separate model you can train with your
+                  own data.
+                </p>
+              </FadeInUp>
+              <FadeInUp className="mt-8 flex flex-wrap items-center justify-center gap-3" delay={260}>
+                <ActionLink href="#pricing">Get started</ActionLink>
+                <ActionLink href="#features" secondary>Learn more</ActionLink>
+              </FadeInUp>
+            </div>
+            <FadeInUp className="w-full max-w-5xl" delay={350}>
+              <DesktopDownloads />
+            </FadeInUp>
+          </section>
+        );
+      }
+
+      function ChatMockup() {
+        return (
+          <div className="video-mockup relative flex min-h-[410px] items-center justify-center overflow-hidden rounded-3xl border border-white/10 p-5 sm:p-8">
+            <video
+              aria-hidden="true"
+              autoPlay
+              className="absolute inset-0 -z-10 h-full w-full object-cover"
+              loop
+              muted
+              playsInline
+              src="https://cdn.sceneai.art/Hero%20Section%20Video/1bcc8fa3-37f6-4c53-8591-0347e4c7f8ac.mp4"
+            />
+            <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#1C1C1E]/90 p-4 shadow-2xl backdrop-blur-xl sm:p-5">
+              <div className="mb-5 flex flex-wrap gap-2">
+                {["Create image", "Write", "Analyze"].map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+              <div className="mb-5 min-h-32 rounded-xl border border-white/5 bg-black/30 p-4">
+                <p className="mb-2 text-xs text-gray-500">Lightning AI Assistant</p>
+                <p className="text-sm leading-6 text-gray-200">
+                  What can I help you understand today?
+                </p>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/40 px-4 py-3">
+                <span className="flex-1 text-sm text-gray-500">Ask anything...</span>
+                <button aria-label="Voice input" className="text-gray-400" type="button">
+                  <Icon name="mic" className="h-4 w-4" />
+                </button>
+                <button aria-label="Send message" className="text-white" type="button">
+                  <Icon name="sound" className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function Waveform() {
+        const heights = [
+          11, 19, 13, 26, 17, 31, 16, 23, 12, 28, 18, 35, 20, 12, 26, 15, 32, 19,
+          11, 24, 16, 29, 13, 22, 34, 17, 12, 27, 15, 20, 31, 13, 25, 17,
+        ];
+        return (
+          <div aria-label="Audio waveform" className="flex h-10 items-center justify-between gap-[3px]" role="img">
+            {heights.map((height, index) => (
+              <span
+                className="wave-bar"
+                key={`${index}-${height}`}
+                style={{ height: `${height}px`, opacity: index < 17 ? 0.95 : 0.48 }}
+              />
+            ))}
+          </div>
+        );
+      }
+
+      function TranscriptionMockup() {
+        return (
+          <div className="video-mockup relative flex min-h-[410px] items-center justify-center overflow-hidden rounded-3xl border border-white/10 p-5 sm:p-8">
+            <video
+              aria-hidden="true"
+              autoPlay
+              className="absolute inset-0 -z-10 h-full w-full object-cover"
+              loop
+              muted
+              playsInline
+              src="https://cdn.sceneai.art/Hero%20Section%20Video/736fd4a0-70ac-4f44-9633-55769ead6aca.mp4"
+            />
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1C1C1E]/90 p-5 shadow-2xl backdrop-blur-xl">
+              <div className="mb-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button
+                    aria-label="Play recording"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"
+                    type="button"
+                  >
+                    <Icon name="play" className="h-4 w-4" />
+                  </button>
+                  <div>
+                    <p className="text-sm font-medium text-white">11:06 AM – Chris</p>
+                    <p className="mt-1 text-xs text-gray-500">Voice note · 00:42</p>
+                  </div>
+                </div>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-300">
+                  Transcribed
+                </span>
+              </div>
+              <Waveform />
+              <div className="my-5 h-px bg-white/10" />
+              <p className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-gray-500">
+                Transcription
+              </p>
+              <p className="text-sm leading-6 text-gray-300">
+                “Let’s review the project timeline and make sure we’re aligned
+                on the next steps before Friday.”
+              </p>
+              <button className="mt-4 text-xs text-gray-400 transition-colors hover:text-white" type="button">
+                Copy transcript
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      function LiveCopilotMockup() {
+        return (
+          <div className="video-mockup relative flex min-h-[410px] items-center justify-center overflow-hidden rounded-3xl border border-white/10 p-5 sm:p-8">
+            <video
+              aria-hidden="true"
+              autoPlay
+              className="absolute inset-0 -z-10 h-full w-full object-cover"
+              loop
+              muted
+              playsInline
+              src={HERO_VIDEO}
+            />
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1C1C1E]/90 p-5 shadow-2xl backdrop-blur-xl">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-white">Lightning AI Copilot</p>
+                  <p className="mt-1 text-xs text-gray-500">Your trained study assistant</p>
+                </div>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-300">
+                  Visible assistance
+                </span>
+              </div>
+              <div className="mb-4 flex flex-wrap gap-2">
+                {["Zoom", "Microsoft Teams", "Your training data"].map((item) => (
+                  <span
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300"
+                    key={item}
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/35 p-4">
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-gray-500">
+                  From your study materials
+                </p>
+                <p className="text-sm leading-6 text-gray-200">
+                  Your notes highlight three key points. Use them to guide your
+                  explanation, then add an example in your own words.
+                </p>
+              </div>
+              <p className="mt-4 text-xs leading-5 text-gray-500">
+                For meetings and presentations where AI assistance is permitted
+                and disclosed.
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      function FeatureCopy({ badge, color, title, description }) {
+        return (
+          <div className="flex flex-col items-start justify-center">
+            <span className={`mb-5 text-sm font-medium ${color}`}>
+              <span aria-hidden="true" className="mr-2">✨</span>
+              {badge}
+            </span>
+            <h2 className="max-w-xl text-4xl font-semibold leading-[1.12] tracking-tight text-white md:text-5xl">
+              {title}
+            </h2>
+            <p className="mt-5 max-w-lg text-base leading-7 text-gray-400">
+              {description}
+            </p>
+            <div className="mt-8">
+              <ActionLink href="#pricing">Get started</ActionLink>
+            </div>
+          </div>
+        );
+      }
+
+      function Features() {
+        return (
+          <>
+            <section className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-6 py-24 lg:grid-cols-2 lg:gap-16" id="features">
+              <FadeInUp className="flex items-center">
+                <FeatureCopy
+                  badge="AI chat"
+                  color="text-yellow-300"
+                  description="Lightning AI answers questions, explains complex ideas, and helps you learn from your own materials. Use the chat assistant for everyday study and to practise mock interview questions at your own pace."
+                  title="Where speed meets intelligent conversation."
+                />
+              </FadeInUp>
+              <FadeInUp delay={120}>
+                <ChatMockup />
+              </FadeInUp>
+              <FadeInUp>
+                <TranscriptionMockup />
+              </FadeInUp>
+              <FadeInUp delay={120}>
+                <FeatureCopy
+                  badge="AI transcription"
+                  color="text-emerald-300"
+                  description="Automatically convert speech into accurate, editable text in real time. Perfect for meetings, interviews, voice notes, and more, powered by advanced speech recognition technology."
+                  title="Turn speech into text with speed and precision."
+                />
+              </FadeInUp>
+              <FadeInUp className="flex items-center">
+                <FeatureCopy
+                  badge="Trainable AI copilot"
+                  color="text-sky-300"
+                  description="Train Lightning AI with your own notes and reference material, then use your trained copilot for transparent, permitted support during presentations, mock interviews, and online Zoom or Microsoft Teams meetings. In real hiring interviews or assessments, use live AI assistance only when explicitly permitted and disclosed."
+                  title="Your own AI, ready when you speak."
+                />
+              </FadeInUp>
+              <FadeInUp delay={120}>
+                <LiveCopilotMockup />
+              </FadeInUp>
+            </section>
+            <FeatureShowcase />
+          </>
+        );
+      }
+
+      function FeatureShowcase() {
+        const practicePoints = [
+          "Solution outline",
+          "Runtime",
+          "Memory",
+          "Edge cases",
+          "Architecture",
+        ];
+        const practiceTips = [
+          ["Stay on the question", "Keep prompts and key ideas in view."],
+          ["Revisit practice rounds", "Reflect on what worked and what to improve."],
+          ["Bring your notes", "Use your own material to guide each session."],
+          ["Speak your language", "Practise explaining ideas in your preferred language."],
+          ["Sound like yourself", "Build confidence with clear, natural explanations."],
+        ];
+
+        return (
+          <section
+            aria-label="More ways to learn and practise with Lightning AI"
+            className="relative isolate mx-auto max-w-7xl overflow-hidden px-6 pb-24"
+          >
+            <video
+              aria-hidden="true"
+              autoPlay
+              className="hero-video absolute inset-0 z-0 h-full w-full object-cover opacity-60"
+              loop
+              muted
+              playsInline
+              preload="none"
+              src={HERO_VIDEO}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 z-0 bg-gradient-to-b from-black/55 via-black/70 to-black/85"
+            />
+            <div className="relative z-10">
+            <div className="grid gap-5 md:grid-cols-2">
+              <FadeInUp>
+                <article className="h-full rounded-3xl border border-white/10 bg-[#111214]/60 p-6 backdrop-blur-xl sm:p-8">
+                  <div className="mb-6 flex items-center justify-between gap-4">
+                    <span className="text-sm font-medium text-emerald-300">
+                      <span aria-hidden="true" className="mr-2">✦</span>
+                      Practice with confidence
+                    </span>
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-medium text-emerald-300">
+                      Permission first
+                    </span>
+                  </div>
+                  <h2 className="max-w-lg text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">
+                    Keep your own thinking at the center.
+                  </h2>
+                  <p className="mt-4 max-w-lg text-base leading-7 text-gray-400">
+                    Use Lightning to prepare and learn. In live meetings or
+                    assessments, use AI only when it is permitted and disclosed.
+                  </p>
+                  <ul className="mt-7 grid gap-3 sm:grid-cols-2">
+                    {[
+                      "For permitted learning settings",
+                      "Be clear about AI assistance",
+                      "Practise before the big day",
+                      "Answer in your own words",
+                    ].map((item) => (
+                      <li
+                        className="flex items-center gap-2 text-sm text-gray-300"
+                        key={item}
+                      >
+                        <span aria-hidden="true" className="text-emerald-300">✓</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              </FadeInUp>
+
+              <FadeInUp delay={120}>
+                <article className="h-full rounded-3xl border border-white/10 bg-[#111214]/60 p-6 backdrop-blur-xl sm:p-8">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-sky-300">
+                        <span aria-hidden="true" className="mr-2">✦</span>
+                        AI transcription
+                      </p>
+                      <h3 className="mt-4 text-2xl font-semibold tracking-tight text-white">
+                        Keep up with every conversation.
+                      </h3>
+                    </div>
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-medium text-emerald-300">
+                      Transcribed
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-gray-400">
+                    Turn speech into editable text for meetings, voice notes, and review.
+                  </p>
+                  <div className="my-6 text-sky-300">
+                    <Waveform />
+                  </div>
+                  <div className="border-t border-white/10 pt-5">
+                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-500">
+                      Transcript
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-gray-300">
+                      “Let’s review the project timeline and make sure we’re aligned
+                      on the next steps before Friday.”
+                    </p>
+                  </div>
+                </article>
+              </FadeInUp>
+            </div>
+
+            <FadeInUp className="mt-5">
+              <article className="grid gap-6 rounded-3xl border border-white/10 bg-[#111214]/60 p-6 backdrop-blur-xl sm:p-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+                <div>
+                  <p className="text-sm font-medium text-yellow-300">
+                    <span aria-hidden="true" className="mr-2">✦</span>
+                    Mock interview practice
+                  </p>
+                  <h2 className="mt-4 text-3xl font-semibold leading-tight tracking-tight text-white">
+                    A useful starting point for your next answer.
+                  </h2>
+                  <p className="mt-4 text-base leading-7 text-gray-400">
+                    Turn a broad prompt into a clear structure, then practise
+                    explaining it in your own words.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-5 backdrop-blur-md sm:p-6">
+                  <p className="text-sm text-gray-400">
+                    Q: “Describe a complex challenge you faced…”
+                  </p>
+                  <div className="mt-5 rounded-xl border border-white/10 bg-[#1C1C1E]/75 p-5 backdrop-blur-md">
+                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-yellow-300">
+                      Suggested structure
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-gray-300">
+                      Set the context, explain your decision, then share the outcome.
+                    </p>
+                  </div>
+                </div>
+              </article>
+            </FadeInUp>
+
+            <div className="mt-5 grid gap-5 md:grid-cols-3">
+              <FadeInUp>
+                <article className="h-full rounded-3xl border border-white/10 bg-[#111214]/60 p-6 backdrop-blur-xl">
+                  <p className="text-sm font-medium text-violet-300">
+                    <span aria-hidden="true" className="mr-2">✦</span>
+                    Screen vision
+                  </p>
+                  <h3 className="mt-4 text-xl font-semibold tracking-tight text-white">
+                    Make sense of what you see.
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-gray-400">
+                    Review coding problems, diagrams, and shared slides in learning
+                    sessions where visual AI assistance is allowed.
+                  </p>
+                  <ul className="mt-5 space-y-3 border-t border-white/10 pt-5 text-sm text-gray-300">
+                    {["Problem breakdown", "Diagram reading", "Visual explanations"].map((item) => (
+                      <li className="flex items-center gap-2" key={item}>
+                        <span aria-hidden="true" className="text-violet-300">✓</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              </FadeInUp>
+
+              <FadeInUp delay={80}>
+                <article className="h-full rounded-3xl border border-white/10 bg-[#111214]/60 p-6 backdrop-blur-xl">
+                  <p className="text-sm font-medium text-pink-300">
+                    <span aria-hidden="true" className="mr-2">✦</span>
+                    Personalized context
+                  </p>
+                  <h3 className="mt-4 text-xl font-semibold tracking-tight text-white">
+                    Bring your background into the conversation.
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-gray-400">
+                    Give your study and mock interview sessions context that
+                    reflects your goals.
+                  </p>
+                  <ul className="mt-5 space-y-3 border-t border-white/10 pt-5 text-sm text-gray-300">
+                    {["Your study notes", "Target role and goals", "Your preferred tone"].map((item) => (
+                      <li className="flex items-center gap-2" key={item}>
+                        <span aria-hidden="true" className="text-pink-300">✓</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              </FadeInUp>
+
+              <FadeInUp delay={160}>
+                <article className="h-full rounded-3xl border border-white/10 bg-[#111214]/60 p-6 backdrop-blur-xl">
+                  <p className="text-sm font-medium text-sky-300">
+                    <span aria-hidden="true" className="mr-2">✦</span>
+                    Fits your workflow
+                  </p>
+                  <h3 className="mt-4 text-xl font-semibold tracking-tight text-white">
+                    Works alongside your familiar tools.
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-gray-400">
+                    Use Lightning for study and practice alongside meeting tools.
+                    Live AI assistance should always be permitted and disclosed.
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-5">
+                    {["Zoom", "Microsoft Teams", "Practice"].map((item) => (
+                      <span
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300"
+                        key={item}
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </article>
+              </FadeInUp>
+            </div>
+
+            <FadeInUp className="mt-5">
+              <article className="rounded-3xl border border-white/10 bg-[#111214]/60 p-6 backdrop-blur-xl sm:p-8">
+                <div className="flex items-start gap-4">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 font-mono text-sm text-gray-200">
+                    &lt;/&gt;
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-yellow-300">Practice toolkit</p>
+                    <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">
+                      Build a technical answer, one part at a time.
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-gray-400">
+                      Break a practice prompt into steps you can understand, evaluate, and explain.
+                    </p>
+                  </div>
+                </div>
+                <ul className="mt-6 grid grid-cols-2 gap-3 border-t border-white/10 pt-6 sm:grid-cols-5">
+                  {practicePoints.map((point) => (
+                    <li
+                      className="rounded-xl border border-white/10 bg-black/25 px-3 py-3 text-center text-sm text-gray-300"
+                      key={point}
+                    >
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </FadeInUp>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {practiceTips.map(([title, description], index) => (
+                <FadeInUp delay={index * 50} key={title}>
+                  <article className="h-full rounded-2xl border border-white/10 bg-[#111214]/45 px-4 py-4 backdrop-blur-lg">
+                    <span className="text-xs font-medium text-gray-500">
+                      0{index + 1}
+                    </span>
+                    <h3 className="mt-3 text-base font-semibold text-white">{title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-gray-400">{description}</p>
+                  </article>
+                </FadeInUp>
+              ))}
+            </div>
+
+            <div className="mt-24 border-t border-white/10 pt-16 sm:mt-28 sm:pt-20">
+              <FadeInUp className="mx-auto mb-10 max-w-2xl text-center">
+                <p className="text-sm font-medium text-yellow-300">
+                  Practice, one step at a time
+                </p>
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  How it works
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
+                  Bring your goals, practise out loud, and make each answer your own.
+                </p>
+              </FadeInUp>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    icon: "play",
+                    title: "Choose your session",
+                    description: "Ask a question, explore a topic, or start a mock interview.",
+                  },
+                  {
+                    icon: "sound",
+                    title: "Add your background",
+                    description: "Bring your study notes and set your role, goals, or preferences.",
+                  },
+                  {
+                    icon: "arrow",
+                    title: "Start your practice",
+                    description: "Work through ideas at your pace and build a clear response.",
+                  },
+                  {
+                    icon: "mic",
+                    title: "Stay in the conversation",
+                    description:
+                      "Review transcription and copilot prompts when AI assistance is permitted and disclosed.",
+                  },
+                ].map((step, index) => (
+                  <FadeInUp delay={index * 70} key={step.title}>
+                    <article className="h-full rounded-2xl border border-white/10 bg-[#111214]/60 p-5 text-center backdrop-blur-xl sm:p-6">
+                      <span className="relative mx-auto grid h-12 w-12 place-items-center rounded-xl border border-white/10 bg-white/5 text-yellow-300">
+                        <Icon name={step.icon} className="h-5 w-5" />
+                        <span className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full border border-white/10 bg-[#111214] text-[10px] font-semibold text-gray-300">
+                          0{index + 1}
+                        </span>
+                      </span>
+                      <h3 className="mt-5 text-base font-semibold text-white">
+                        {step.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-gray-400">
+                        {step.description}
+                      </p>
+                    </article>
+                  </FadeInUp>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-20 border-t border-white/10 py-10 sm:mt-24">
+              <FadeInUp>
+                <p className="text-center text-sm font-medium text-gray-300">
+                  Practice for interviews at ambitious teams
+                </p>
+                <div
+                  aria-label="Example interview companies: Cisco, Intel, NVIDIA, Oracle, Salesforce, Tesla, Uber, Microsoft, Meta, Netflix, LinkedIn, and PayPal"
+                  className="marquee-mask mt-7 overflow-hidden"
+                  role="img"
+                >
+                  <div
+                    aria-hidden="true"
+                    className="marquee-track animate-marquee flex w-max motion-reduce:animate-none"
+                  >
+                    {[0, 1].map((copy) => (
+                      <ul
+                        className="flex shrink-0 items-center"
+                        key={copy}
+                      >
+                        {[
+                          ["Cisco", "https://cdn.simpleicons.org/cisco/049FD9"],
+                          ["Intel", "https://cdn.simpleicons.org/intel/0071C5"],
+                          ["NVIDIA", "https://cdn.simpleicons.org/nvidia/76B900"],
+                          ["Oracle", "https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/oracle/oracle-original.svg"],
+                          ["Salesforce", "https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/salesforce/salesforce-original.svg"],
+                          ["Tesla", "https://cdn.simpleicons.org/tesla/E82127"],
+                          ["Uber", "https://cdn.simpleicons.org/uber/FFFFFF"],
+                          ["Microsoft", null],
+                          ["Meta", "https://cdn.simpleicons.org/meta/0082FB"],
+                          ["Netflix", "https://cdn.simpleicons.org/netflix/E50914"],
+                          ["LinkedIn", "https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/linkedin/linkedin-original.svg"],
+                          ["PayPal", "https://cdn.simpleicons.org/paypal/003087"],
+                        ].map(([company, logo]) => (
+                          <li
+                            className="flex h-16 w-36 shrink-0 items-center justify-center px-4 opacity-80 sm:w-40"
+                            key={company}
+                          >
+                            {company === "Microsoft" ? (
+                              <svg
+                                aria-hidden="true"
+                                className="h-8 w-8"
+                                fill="none"
+                                viewBox="0 0 32 32"
+                              >
+                                <path fill="#F25022" d="M2 2h13v13H2z" />
+                                <path fill="#7FBA00" d="M17 2h13v13H17z" />
+                                <path fill="#00A4EF" d="M2 17h13v13H2z" />
+                                <path fill="#FFB900" d="M17 17h13v13H17z" />
+                              </svg>
+                            ) : (
+                              <img
+                                alt=""
+                                className="max-h-8 max-w-28 object-contain"
+                                draggable="false"
+                                src={logo}
+                              />
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ))}
+                  </div>
+                </div>
+                <p className="mt-4 text-center text-xs text-gray-500">
+                  Company logos are examples only. Lightning AI is independent and not affiliated with these companies.
+                </p>
+              </FadeInUp>
+            </div>
+            </div>
+          </section>
+        );
+      }
+
+      function Pricing() {
+        const plans = [
+          {
+            eyebrow: "Flexible monthly access",
+            name: "Lightning Plus",
+            price: "₹999",
+            period: "/ month",
+            description: "AI-powered learning and practice, billed monthly.",
+            features: [
+              "Personal AI learning assistant",
+              "Study from your own materials",
+              "Quizzes, mock tests & interview practice",
+              "In-app Focus Mode",
+            ],
+            href: "https://edurute.lemonsqueezy.com/checkout/buy/3ba76d5c-57c0-4908-876b-71b702c01e3b",
+            action: "Get Lightning Plus",
+          },
+          {
+            eyebrow: "Best value · 6 months",
+            name: "Lightning Plus",
+            price: "₹2,999",
+            period: "/ 6 months",
+            description: "Six months of access, billed once (about ₹500/month).",
+            features: [
+              "Personal AI learning assistant",
+              "Study from your own materials",
+              "Quizzes, mock tests & interview practice",
+              "In-app Focus Mode",
+            ],
+            href: "https://edurute.lemonsqueezy.com/checkout/buy/2def001f-3389-4737-98e8-1c19d12cd7ef",
+            action: "Choose 6-month plan",
+            featured: true,
+          },
+          {
+            eyebrow: "Separate product · train it yourself",
+            name: "Lightning Trainable Model",
+            price: "₹4,999",
+            period: "/ one-time",
+            description:
+              "An untrained base model to train and run with your own data using VS Code. A compatible setup and your own training materials are required.",
+            features: [
+              "Untrained base model",
+              "Customize with your own data",
+              "Train and experiment in VS Code",
+            ],
+            href: "https://edurute.lemonsqueezy.com/checkout/buy/63600084-c970-4a51-85a3-d6b3ac23d70d",
+            action: "Buy trainable model",
+          },
+        ];
+
+        return (
+          <section className="mx-auto max-w-7xl px-6 py-24" id="pricing">
+            <FadeInUp>
+              <div className="mx-auto mb-14 max-w-2xl text-center">
+                <p className="mb-4 text-sm font-medium text-gray-400">
+                  Choose your Lightning AI plan
+                </p>
+                <h2 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">
+                  Start learning with Lightning.
+                </h2>
+                <p className="mt-5 text-base leading-7 text-gray-400">
+                  Get the ready-to-use AI learning assistant, or choose the
+                  separate trainable model to build around your own data.
+                </p>
+              </div>
+              <div className="grid gap-5 lg:grid-cols-3">
+                {plans.map((plan) => (
+                  <article
+                    className={`flex h-full flex-col rounded-3xl border p-7 sm:p-8 ${
+                      plan.featured
+                        ? "border-white/10 bg-white/[0.025]"
+                        : "border-white/10 bg-white/[0.025]"
+                    }`}
+                    key={`${plan.name}-${plan.period}`}
+                  >
+                    <p className="text-xs font-medium text-gray-400">{plan.eyebrow}</p>
+                    <h3 className="mt-4 text-xl font-semibold text-white">{plan.name}</h3>
+                    <p className="mt-2 min-h-12 text-sm leading-6 text-gray-400">
+                      {plan.description}
+                    </p>
+                    <p className="mt-7 flex items-baseline gap-2 text-white">
+                      <span className="text-4xl font-semibold tracking-tight">{plan.price}</span>
+                      <span className="text-sm text-gray-400">{plan.period}</span>
+                    </p>
+                    <ul className="my-7 flex-1 space-y-3 border-t border-white/10 pt-6">
+                      {plan.features.map((feature) => (
+                        <li className="flex gap-3 text-sm text-gray-300" key={feature}>
+                          <span aria-hidden="true" className="text-gray-500">✓</span>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <a
+                      className={`inline-flex min-h-12 items-center justify-center rounded-full px-5 text-sm font-medium transition-colors ${
+                        plan.featured
+                          ? "border border-white/10 bg-white/5 text-white hover:bg-white/10"
+                          : "border border-white/10 bg-white/5 text-white hover:bg-white/10"
+                      }`}
+                      href={plan.href}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {plan.action}
+                      <span aria-hidden="true" className="ml-2">↗</span>
+                    </a>
+                  </article>
+                ))}
+              </div>
+            </FadeInUp>
+          </section>
+        );
+      }
+
+      const questions = [
+        {
+          question: "What is Lightning AI?",
+          answer:
+            "Lightning AI brings question-answering, study tools, mock interview practice, and speech transcription together. A separate trainable model is available for people who want to train and run it with their own data.",
+        },
+        {
+          question: "Can Lightning help me prepare for interviews?",
+          answer:
+            "Yes. Use Lightning to practise mock questions, work through your answers, and build confidence before an interview.",
+        },
+        {
+          question: "What does AI transcription do?",
+          answer:
+            "Lightning AI transcription turns speech into editable text for meetings, interviews, and voice notes. Accuracy may vary with audio quality, accents, and background noise, so review important details.",
+        },
+        {
+          question: "What is the Lightning Trainable Model?",
+          answer:
+            "It is a separate, untrained base model. The one-time ₹4,999 offer is for people who want to train and run it with their own data using VS Code; a compatible setup and training materials are required.",
+        },
+        {
+          question: "How much does Lightning AI cost?",
+          answer:
+            "Lightning Plus costs ₹999 per month or ₹2,999 for six months. The separate Lightning Trainable Model costs ₹4,999 as a one-time purchase.",
+        },
+      ];
+
+      function FAQItem({ question, answer, index, open, onToggle }) {
+        const answerId = `faq-answer-${index}`;
+        return (
+          <div className={index < questions.length - 1 ? "border-b border-white/10" : ""}>
+            <button
+              aria-controls={answerId}
+              aria-expanded={open}
+              className="flex w-full items-center justify-between gap-6 px-6 py-6 text-left"
+              onClick={onToggle}
+              type="button"
+            >
+              <span className="text-base font-medium text-white">{question}</span>
+              <span
+                aria-hidden="true"
+                className="faq-plus flex h-7 w-7 shrink-0 items-center justify-center text-2xl font-light text-gray-400"
+                data-open={open}
+              >
+                +
+              </span>
+            </button>
+            <div
+              className="faq-answer"
+              data-open={open}
+              id={answerId}
+              role="region"
+            >
+              <div>
+                <p className="px-6 pb-6 text-sm leading-6 text-gray-400">{answer}</p>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function FAQ() {
+        const [openIndex, setOpenIndex] = useState(null);
+        return (
+          <section className="mx-auto max-w-3xl px-6 py-32" id="faq">
+            <FadeInUp>
+              <h2 className="mb-12 text-center text-4xl font-semibold tracking-tight text-white md:text-5xl">
+                We&apos;ve got answers
+              </h2>
+              <div className="rounded-xl border border-white/10 bg-transparent">
+                {questions.map(({ question, answer }, index) => (
+                  <FAQItem
+                    answer={answer}
+                    index={index}
+                    key={question}
+                    onToggle={() =>
+                      setOpenIndex((current) => (current === index ? null : index))
+                    }
+                    open={openIndex === index}
+                    question={question}
+                  />
+                ))}
+              </div>
+            </FadeInUp>
+          </section>
+        );
+      }
+
+      function Footer() {
+        const columns = [
+          {
+            title: "Product",
+            links: [
+              ["About", "#about"],
+              ["Pricing", "#pricing"],
+              ["Changelog", "#features"],
+              ["Contact", "#contact"],
+            ],
+          },
+          {
+            title: "Legal",
+            links: [
+              ["Terms of service", "#contact"],
+              ["Privacy policy", "#contact"],
+              ["404", "#contact"],
+            ],
+          },
+          {
+            title: "Connect",
+            links: [
+              ["Instagram", "https://www.instagram.com/"],
+              ["YouTube", "https://www.youtube.com/"],
+              ["LinkedIn", "https://www.linkedin.com/"],
+              ["Twitter / X", "https://x.com/"],
+            ],
+          },
+        ];
+
+        return (
+          <footer className="relative z-0 overflow-hidden border-t border-white/5 px-6 pb-10 pt-32" id="contact">
+            <video
+              aria-hidden="true"
+              autoPlay
+              className="absolute inset-0 -z-10 h-full w-full object-cover opacity-40"
+              loop
+              muted
+              playsInline
+              src={HERO_VIDEO}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 -z-10 bg-gradient-to-b from-black via-black/80 to-black"
+            />
+            <FadeInUp className="mx-auto mb-32 max-w-4xl text-center">
+              <h2 className="text-4xl font-medium tracking-tight text-white md:text-6xl">
+                Ready to learn with
+                <br className="hidden sm:block" />{" "}
+                <span className="font-serif italic">Lightning AI?</span>
+              </h2>
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                <ActionLink href="#pricing">Get started</ActionLink>
+                <ActionLink href="#about" secondary>Learn more</ActionLink>
+              </div>
+            </FadeInUp>
+            <div className="mx-auto mb-24 grid max-w-7xl grid-cols-1 gap-10 md:grid-cols-4 md:gap-8">
+              <div>
+                <a className="inline-flex items-center gap-1 text-white" href="#about">
+                  <LogoMark />
+                  <BrandName />
+                </a>
+                <p className="mt-4 max-w-xs text-sm text-gray-400">
+                  AI-powered study, mock interview practice, transcription, and a model you can train with your own data.
+                </p>
+              </div>
+              {columns.map((column) => (
+                <div key={column.title}>
+                  <h3 className="mb-5 text-sm font-semibold text-white">{column.title}</h3>
+                  <ul className="space-y-3">
+                    {column.links.map(([label, href]) => (
+                      <li key={label}>
+                        <a
+                          className="text-sm text-gray-400 transition-colors hover:text-white"
+                          href={href}
+                          rel={href.startsWith("https://") ? "noreferrer" : undefined}
+                          target={href.startsWith("https://") ? "_blank" : undefined}
+                        >
+                          {label}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-4 border-t border-white/5 pt-8 text-center text-xs text-gray-500 md:flex-row">
+              <span>© 2026 Lightning AI. All rights reserved.</span>
+              <span aria-hidden="true" className="hidden text-gray-700 md:inline">·</span>
+              <span>Learn. Practise. Build.</span>
+              <span aria-hidden="true" className="hidden text-gray-700 md:inline">·</span>
+              <a className="text-gray-400 transition-colors hover:text-white" href="#pricing">Explore plans</a>
+            </div>
+          </footer>
+        );
+      }
+
+      function App() {
+        return (
+          <>
+            <Navigation />
+            <main>
+              <Hero />
+              <Features />
+              <Pricing />
+              <FAQ />
+            </main>
+            <Footer />
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
