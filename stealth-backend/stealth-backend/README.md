@@ -89,6 +89,43 @@ token to the entitlement route. This starter flow does not verify ownership of
 the submitted email; connect it to the app's verified sign-in before a public
 launch. Checkout is rate-limited to 10 attempts per IP per 15 minutes.
 
+If checkout fails, the response includes a diagnostic `code` and `reference`.
+Search Render logs for the JSON event `dodo_checkout_failed` with the same
+reference. It includes the provider HTTP status, safe provider error code,
+request ID, and configured mode, but never logs the API key, webhook key,
+customer email, or raw provider message. For example:
+
+- `DODO_AUTHENTICATION` (401): check API key and test/live mode match.
+- `DODO_PRODUCT_NOT_FOUND` (404): check product ID, account, and mode.
+- `DODO_CHECKOUT_REJECTED` (400/422): check the product is recurring and Dodo
+  accepts the seven-day trial for that product.
+- `DODO_PERMISSION` (403): check API key permissions.
+- `DODO_CONNECTION` or `DODO_UNAVAILABLE`: check Render network/logs and retry.
+
+Share only the diagnostic code, provider status/code, and reference when
+troubleshooting. Never share credentials or full request/response payloads.
+
+### `POST /api/billing/device-checkout`
+
+The desktop app uses this endpoint without creating a Lightning username or
+password. It sends a SHA-256 device identifier, the billing email required by
+Dodo checkout, and `mode: "trial"` or `"subscription"`. The server stores only
+a second SHA-256 hash of the device identifier. A device can claim only one
+trial; retrying an unfinished checkout returns the same hosted checkout
+session. A paid checkout does not include a trial.
+
+Starting the seven-day auto-renewing trial requires Dodo checkout at first use,
+including a billing email and payment method. The app does not receive access
+until a signed subscription webhook confirms the trial. It stores the returned
+access token using the operating system credential store and checks the
+entitlement online before enabling model features. Users can cancel through
+Dodo before the renewal date.
+
+The device identifier is derived from the Windows machine GUID or macOS
+platform UUID, hashed before transmission, and used only to limit repeat
+trials. This is a deterrent, not tamper-proof DRM: a modified client can forge
+requests, and resetting or changing device identity may permit another trial.
+
 ### `GET /api/entitlements`
 
 Requires `Authorization: Bearer <access_token>`. Returns `entitled`, plan phase,
@@ -114,9 +151,9 @@ Tests use a local in-memory libSQL database, mock checkout creation, and the
 Dodo SDK's real webhook signature verifier. They do not contact Dodo or charge
 a payment method.
 
-## Remaining app integration
+## Desktop releases
 
-The website's download buttons and desktop app are not connected to this API.
-The desktop app must securely save the returned token and check
-`GET /api/entitlements` before granting model access. The actual Windows and
-macOS installers must also be supplied and published separately.
+The app's model features are locked until the online entitlement check succeeds.
+After changing app licensing code, rebuild and publish the Windows installer
+and macOS package so downloads contain the updated enforcement. The macOS
+release must be rebuilt on macOS.

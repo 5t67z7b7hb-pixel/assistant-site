@@ -16,9 +16,11 @@ function createFakeDodo() {
   });
   const fakeDodo = {
     checkoutPayload: null,
+    checkoutCalls: 0,
     checkoutSessions: {
       create: async (payload) => {
         fakeDodo.checkoutPayload = payload;
+        fakeDodo.checkoutCalls += 1;
         return {
           checkout_url: "https://checkout.example.test/session",
           session_id: "cks_test_123",
@@ -96,6 +98,15 @@ describe("Dodo subscription API", () => {
     return { response, result: await response.json() };
   }
 
+  async function deviceCheckout(deviceId, mode = "trial", email = "customer@example.com") {
+    const response = await fetch(`${baseUrl}/api/billing/device-checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_id: deviceId, mode, email }),
+    });
+    return { response, result: await response.json() };
+  }
+
   async function sendEvent(type, data, id, timestamp = new Date()) {
     const event = { type, timestamp: timestamp.toISOString(), data };
     const signed = signEvent(event, id);
@@ -124,6 +135,62 @@ describe("Dodo subscription API", () => {
     assert.equal(result.session_id, "cks_test_123");
     assert.equal(typeof result.access_token, "string");
     assert.equal(result.access_token.length > 30, true);
+  });
+
+  it("starts one device-bound trial without creating an app signup", async () => {
+    const deviceId = "a".repeat(64);
+    const { response, result } = await deviceCheckout(deviceId);
+    assert.equal(response.status, 201);
+    assert.equal(fakeDodo.checkoutPayload.subscription_data.trial_period_days, 7);
+    assert.equal(fakeDodo.checkoutPayload.customer.email, "customer@example.com");
+    assert.equal(fakeDodo.checkoutCalls, 1);
+    assert.equal(typeof result.access_token, "string");
+    assert.equal(result.mode, "trial");
+
+    const device = await db.execute({
+      sql: "SELECT * FROM device_trials",
+    });
+    assert.equal(device.rows.length, 1);
+    assert.match(device.rows[0].device_id_hash, /^[a-f0-9]{64}$/);
+    assert.notEqual(device.rows[0].device_id_hash, deviceId);
+    assert.equal(device.rows[0].trial_claimed_at !== null, true);
+
+    const retry = await deviceCheckout(deviceId);
+    assert.equal(retry.response.status, 200);
+    assert.equal(retry.result.checkout_url, result.checkout_url);
+    assert.equal(fakeDodo.checkoutCalls, 1);
+  });
+
+  it("does not grant a second device trial and creates paid checkout without a trial", async () => {
+    const deviceId = "b".repeat(64);
+    const { result: trial } = await deviceCheckout(deviceId);
+    const accountId = fakeDodo.checkoutPayload.metadata.app_account_id;
+    const activeEvent = await sendEvent(
+      "subscription.active",
+      {
+        subscription_id: "sub_device_trial",
+        product_id: "pdt_monthly_999",
+        status: "active",
+        metadata: { app_account_id: accountId },
+      },
+      "evt_device_trial",
+    );
+    assert.equal(activeEvent.status, 200);
+    await db.execute({
+      sql: "UPDATE subscriptions SET trial_ends_at = ? WHERE subscription_id = ?",
+      args: ["2020-01-01T00:00:00.000Z", "sub_device_trial"],
+    });
+
+    const repeatedTrial = await deviceCheckout(deviceId);
+    assert.equal(repeatedTrial.response.status, 409);
+    assert.equal(repeatedTrial.result.code, "TRIAL_ALREADY_USED");
+
+    const paid = await deviceCheckout(deviceId, "subscription");
+    assert.equal(paid.response.status, 201);
+    assert.equal(paid.result.mode, "subscription");
+    assert.equal(fakeDodo.checkoutCalls, 2);
+    assert.equal(fakeDodo.checkoutPayload.subscription_data, undefined);
+    assert.equal(trial.access_token.length > 30, true);
   });
 
   it("reports not ready until Dodo and Turso configuration exists", async () => {
@@ -157,6 +224,63 @@ describe("Dodo subscription API", () => {
     assert.equal(invalid.response.status, 400);
     assert.equal((await checkout()).response.status, 201);
     assert.equal((await checkout("CUSTOMER@example.com")).response.status, 409);
+  });
+
+  it("returns actionable, redacted diagnostics for Dodo checkout errors", async () => {
+    const secret = "dodo_test_sensitive_key";
+    fakeDodo.checkoutSessions.create = async () => {
+      const error = new Error(`Rejected for customer@example.com using ${secret}`);
+      error.status = 401;
+      error.error = { code: "invalid_api_key" };
+      error.headers = new Headers({ "x-request-id": "dodo-request-123" });
+      throw error;
+    };
+
+    const { response, result } = await checkout();
+    assert.equal(response.status, 502);
+    assert.equal(result.code, "DODO_AUTHENTICATION");
+    assert.equal(result.provider_status, 401);
+    assert.equal(result.provider_code, "invalid_api_key");
+    assert.match(result.reference, /^[0-9a-f-]{36}$/i);
+    assert.equal(JSON.stringify(result).includes(secret), false);
+    assert.equal(JSON.stringify(result).includes("customer@example.com"), false);
+    assert.equal(JSON.stringify(result).includes("dodo-request-123"), false);
+
+    const account = await db.execute("SELECT id FROM accounts WHERE email = ?", [
+      "customer@example.com",
+    ]);
+    assert.equal(account.rows.length, 0);
+  });
+
+  it("classifies common Dodo product, validation, and network failures", async () => {
+    const cases = [
+      { status: 404, code: "DODO_PRODUCT_NOT_FOUND" },
+      { status: 422, code: "DODO_CHECKOUT_REJECTED" },
+      { status: 429, code: "DODO_RATE_LIMITED" },
+      { status: 503, code: "DODO_UNAVAILABLE" },
+    ];
+    for (const [index, testCase] of cases.entries()) {
+      fakeDodo.checkoutSessions.create = async () => {
+        const error = new Error("private provider details");
+        error.status = testCase.status;
+        error.error = { code: "provider_error" };
+        throw error;
+      };
+      const { response, result } = await checkout(`customer${index}@example.com`);
+      assert.equal(response.status, 502);
+      assert.equal(result.code, testCase.code);
+      assert.equal(JSON.stringify(result).includes("private provider details"), false);
+    }
+
+    fakeDodo.checkoutSessions.create = async () => {
+      const error = new Error("private network details");
+      error.name = "APIConnectionTimeoutError";
+      throw error;
+    };
+    const { response, result } = await checkout("network@example.com");
+    assert.equal(response.status, 502);
+    assert.equal(result.code, "DODO_CONNECTION");
+    assert.equal(JSON.stringify(result).includes("private network details"), false);
   });
 
   it("denies access until a signed active subscription webhook arrives", async () => {

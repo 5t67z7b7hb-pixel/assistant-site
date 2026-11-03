@@ -37,6 +37,66 @@ function logFailure(message, error) {
   console.error(`${message} (${String(reason).slice(0, 80)})`);
 }
 
+function getHeader(headers, name) {
+  if (typeof headers?.get === "function") return headers.get(name);
+  const value = headers?.[name] ?? headers?.[name.toLowerCase()];
+  return typeof value === "string" ? value : null;
+}
+
+function classifyCheckoutError(error) {
+  const status = Number.isInteger(error?.status) ? error.status : null;
+  const rawCode = error?.error?.code ?? error?.code;
+  const providerCode =
+    typeof rawCode === "string" && /^[a-z0-9_.-]{1,80}$/i.test(rawCode)
+      ? rawCode
+      : null;
+  const failure = (code, message) => ({ code, message, providerCode });
+
+  if (status === 401) {
+    return failure(
+      "DODO_AUTHENTICATION",
+      "Dodo rejected the API credentials. Verify the key and its test/live mode.",
+    );
+  }
+  if (status === 403) {
+    return failure(
+      "DODO_PERMISSION",
+      "The Dodo API key does not have permission to create checkout sessions.",
+    );
+  }
+  if (status === 404) {
+    return failure(
+      "DODO_PRODUCT_NOT_FOUND",
+      "Dodo could not find this product in the configured account and mode.",
+    );
+  }
+  if (status === 400 || status === 422) {
+    return failure(
+      "DODO_CHECKOUT_REJECTED",
+      "Dodo rejected the checkout configuration. Verify the product is a subscription and supports this trial.",
+    );
+  }
+  if (status === 429) {
+    return failure(
+      "DODO_RATE_LIMITED",
+      "Dodo is rate-limiting checkout requests. Wait and try again.",
+    );
+  }
+  if (status !== null && status >= 500) {
+    return failure("DODO_UNAVAILABLE", "Dodo encountered a server error. Retry later.");
+  }
+  if (error?.name === "APIConnectionError" || error?.name === "APIConnectionTimeoutError") {
+    return failure(
+      "DODO_CONNECTION",
+      "The backend could not connect to Dodo. Check the service network and retry.",
+    );
+  }
+  return failure(
+    "CHECKOUT_PROVIDER_ERROR",
+    "Checkout could not be created. Use the reference when checking backend logs.",
+  );
+}
+
 function parseDate(value) {
   if (typeof value !== "string" || !value) return null;
   const parsed = new Date(value);
@@ -136,6 +196,16 @@ async function initializeDatabase(db) {
         cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
         last_event_at TEXT NOT NULL
       )`,
+      `CREATE TABLE IF NOT EXISTS device_trials (
+        device_id_hash TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL UNIQUE REFERENCES accounts(id),
+        trial_claimed_at TEXT,
+        pending_mode TEXT,
+        pending_started_at TEXT,
+        pending_checkout_url TEXT,
+        pending_session_id TEXT,
+        created_at TEXT NOT NULL
+      )`,
       `CREATE TABLE IF NOT EXISTS webhook_events (
         webhook_id TEXT PRIMARY KEY,
         received_at TEXT NOT NULL
@@ -144,6 +214,60 @@ async function initializeDatabase(db) {
     ],
     "write",
   );
+}
+
+function findCurrentEntitlement(rows, productId, now = Date.now()) {
+  for (const subscription of rows) {
+    if (subscription.product_id !== productId) continue;
+    const trialEnd = parseDate(subscription.trial_ends_at);
+    const paidThrough = parseDate(subscription.paid_through);
+    const graceEnd = parseDate(subscription.grace_ends_at);
+    const { status } = subscription;
+
+    if (status === "active" && paidThrough && now < paidThrough.getTime()) {
+      return {
+        entitled: true,
+        plan: "subscription",
+        subscription_status: status,
+        access_ends_at: paidThrough.toISOString(),
+      };
+    }
+    if (status === "active" && trialEnd && now < trialEnd.getTime()) {
+      return {
+        entitled: true,
+        plan: "trial",
+        subscription_status: status,
+        access_ends_at: trialEnd.toISOString(),
+      };
+    }
+    if (status === "past_due" && graceEnd && now < graceEnd.getTime()) {
+      return {
+        entitled: true,
+        plan: "payment_grace",
+        subscription_status: status,
+        access_ends_at: graceEnd.toISOString(),
+      };
+    }
+    if (
+      status === "cancelled" &&
+      Number(subscription.cancel_at_period_end) === 1 &&
+      paidThrough &&
+      now < paidThrough.getTime()
+    ) {
+      return {
+        entitled: true,
+        plan: "subscription",
+        subscription_status: status,
+        access_ends_at: paidThrough.toISOString(),
+      };
+    }
+  }
+  return {
+    entitled: false,
+    plan: "inactive",
+    subscription_status: rows[0]?.status ?? "pending",
+    access_ends_at: null,
+  };
 }
 
 function createApp(options = {}) {
@@ -274,8 +398,289 @@ function createApp(options = {}) {
         } catch (cleanupError) {
           logFailure("Could not remove failed-checkout account", cleanupError);
         }
-        logFailure("Dodo checkout session creation failed", error);
-        return res.status(502).json({ error: "Unable to start checkout" });
+        const reference = randomUUID();
+        const diagnosis = classifyCheckoutError(error);
+        const providerRequestId =
+          getHeader(error?.headers, "x-request-id") ??
+          getHeader(error?.headers, "request-id");
+        console.error(
+          JSON.stringify({
+            event: "dodo_checkout_failed",
+            reference,
+            code: diagnosis.code,
+            provider_status: Number.isInteger(error?.status) ? error.status : null,
+            provider_code: diagnosis.providerCode ?? null,
+            provider_request_id:
+              typeof providerRequestId === "string"
+                ? providerRequestId.slice(0, 100)
+                : null,
+            environment: config.environment,
+          }),
+        );
+        return res.status(502).json({
+          error: diagnosis.message,
+          code: diagnosis.code,
+          reference,
+          ...(Number.isInteger(error?.status)
+            ? { provider_status: error.status }
+            : {}),
+          ...(diagnosis.providerCode ? { provider_code: diagnosis.providerCode } : {}),
+        });
+      }
+    },
+  );
+
+  app.post(
+    "/api/billing/device-checkout",
+    checkoutLimiter,
+    express.json({ limit: "16kb", strict: true }),
+    async (req, res) => {
+      if (!isBillingConfigured(config) || !db || !dodo) {
+        return res.status(503).json({
+          error: "Subscription checkout is not configured",
+        });
+      }
+
+      const submittedDeviceId =
+        typeof req.body?.device_id === "string" ? req.body.device_id : "";
+      const mode = req.body?.mode;
+      const email =
+        typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      if (!/^[a-f0-9]{64}$/.test(submittedDeviceId)) {
+        return res.status(400).json({ error: "A valid device identifier is required" });
+      }
+      if (mode !== "trial" && mode !== "subscription") {
+        return res.status(400).json({ error: "A valid checkout mode is required" });
+      }
+      if (!EMAIL_PATTERN.test(email)) {
+        return res.status(400).json({ error: "A valid billing email is required" });
+      }
+
+      const deviceIdHash = createHash("sha256").update(submittedDeviceId).digest("hex");
+      const now = new Date().toISOString();
+      const accessToken = randomBytes(32).toString("base64url");
+      const tokenHash = createHash("sha256").update(accessToken).digest("hex");
+      let tx;
+      let accountId;
+      let device;
+      let createdDevice = false;
+      let claimedTrialNow = false;
+      let checkoutMode = mode;
+
+      try {
+        tx = await db.transaction("write");
+        const deviceResult = await tx.execute({
+          sql: "SELECT * FROM device_trials WHERE device_id_hash = ?",
+          args: [deviceIdHash],
+        });
+        device = deviceResult.rows[0] ?? null;
+
+        if (device) {
+          accountId = device.account_id;
+          const subscriptions = await tx.execute({
+            sql: `SELECT product_id, status, trial_ends_at, paid_through, grace_ends_at,
+                         cancel_at_period_end
+                  FROM subscriptions
+                  WHERE account_id = ?
+                  ORDER BY last_event_at DESC`,
+            args: [accountId],
+          });
+          const entitlement = findCurrentEntitlement(
+            subscriptions.rows,
+            config.productId,
+          );
+          await tx.execute({
+            sql: "UPDATE accounts SET token_hash = ? WHERE id = ?",
+            args: [tokenHash, accountId],
+          });
+
+          if (entitlement.entitled) {
+            await tx.commit();
+            return res.json({ ...entitlement, access_token: accessToken });
+          }
+          if (device.pending_checkout_url) {
+            await tx.commit();
+            return res.json({
+              checkout_url: device.pending_checkout_url,
+              session_id: device.pending_session_id,
+              mode: device.pending_mode,
+              access_token: accessToken,
+            });
+          }
+          if (device.pending_mode === "creating") {
+            const pendingStartedAt = parseDate(device.pending_started_at);
+            if (
+              pendingStartedAt &&
+              Date.now() - pendingStartedAt.getTime() < 2 * 60 * 1000
+            ) {
+              await tx.rollback();
+              return res.status(409).json({
+                code: "CHECKOUT_IN_PROGRESS",
+                error: "Checkout is being prepared. Try again shortly.",
+              });
+            }
+          }
+          if (
+            mode === "trial" &&
+            (device.trial_claimed_at || subscriptions.rows.length > 0)
+          ) {
+            await tx.commit();
+            return res.status(409).json({
+              code: "TRIAL_ALREADY_USED",
+              error: "This device has already used its free trial.",
+              access_token: accessToken,
+            });
+          }
+
+          claimedTrialNow = mode === "trial" && !device.trial_claimed_at;
+          checkoutMode = mode;
+          await tx.execute({
+            sql: `UPDATE device_trials
+                  SET trial_claimed_at = CASE
+                        WHEN ? = 1 THEN ?
+                        ELSE trial_claimed_at
+                      END,
+                      pending_mode = ?,
+                      pending_started_at = ?
+                  WHERE device_id_hash = ?`,
+            args: [claimedTrialNow ? 1 : 0, now, mode, now, deviceIdHash],
+          });
+        } else {
+          accountId = randomUUID();
+          const internalEmail = `device-${deviceIdHash}@device.lightning.invalid`;
+          await tx.execute({
+            sql: "INSERT INTO accounts (id, email, token_hash, created_at) VALUES (?, ?, ?, ?)",
+            args: [accountId, internalEmail, tokenHash, now],
+          });
+          await tx.execute({
+            sql: `INSERT INTO device_trials (
+                    device_id_hash, account_id, trial_claimed_at, pending_mode,
+                    pending_started_at, pending_checkout_url, pending_session_id,
+                    created_at
+                  ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)`,
+            args: [
+              deviceIdHash,
+              accountId,
+              mode === "trial" ? now : null,
+              mode,
+              now,
+              now,
+            ],
+          });
+          createdDevice = true;
+          claimedTrialNow = mode === "trial";
+        }
+        await tx.commit();
+      } catch (error) {
+        if (tx) {
+          try {
+            await tx.rollback();
+          } catch (rollbackError) {
+            logFailure("Could not roll back device checkout reservation", rollbackError);
+          }
+        }
+        logFailure("Could not reserve device checkout", error);
+        return res.status(500).json({ error: "Unable to start checkout" });
+      } finally {
+        if (tx) await tx.close();
+      }
+
+      try {
+        const session = await dodo.checkoutSessions.create({
+          product_cart: [{ product_id: config.productId, quantity: 1 }],
+          ...(checkoutMode === "trial"
+            ? { subscription_data: { trial_period_days: TRIAL_DAYS } }
+            : {}),
+          customer: { email },
+          metadata: { app_account_id: accountId },
+          return_url: config.returnUrl,
+        });
+        if (
+          typeof session.checkout_url !== "string" ||
+          !session.checkout_url.startsWith("https://") ||
+          typeof session.session_id !== "string" ||
+          !session.session_id
+        ) {
+          console.error("Dodo returned an invalid device checkout session");
+          throw new Error("Invalid checkout session");
+        }
+        await db.execute({
+          sql: `UPDATE device_trials
+                SET pending_started_at = NULL,
+                    pending_checkout_url = ?,
+                    pending_session_id = ?
+                WHERE device_id_hash = ? AND account_id = ?`,
+          args: [session.checkout_url, session.session_id, deviceIdHash, accountId],
+        });
+        return res.status(201).json({
+          checkout_url: session.checkout_url,
+          session_id: session.session_id,
+          mode: checkoutMode,
+          access_token: accessToken,
+          token_storage: "Store this token securely; it cannot be recovered.",
+        });
+      } catch (error) {
+        try {
+          if (createdDevice) {
+            await db.batch(
+              [
+                {
+                  sql: "DELETE FROM device_trials WHERE device_id_hash = ? AND account_id = ?",
+                  args: [deviceIdHash, accountId],
+                },
+                {
+                  sql: "DELETE FROM accounts WHERE id = ? AND token_hash = ?",
+                  args: [accountId, tokenHash],
+                },
+              ],
+              "write",
+            );
+          } else {
+            await db.execute({
+              sql: `UPDATE device_trials
+                    SET trial_claimed_at = CASE
+                          WHEN ? = 1 THEN NULL
+                          ELSE trial_claimed_at
+                        END,
+                        pending_mode = NULL,
+                        pending_started_at = NULL,
+                        pending_checkout_url = NULL,
+                        pending_session_id = NULL
+                    WHERE device_id_hash = ? AND account_id = ?`,
+              args: [claimedTrialNow ? 1 : 0, deviceIdHash, accountId],
+            });
+          }
+        } catch (cleanupError) {
+          logFailure("Could not clear failed device checkout", cleanupError);
+        }
+        const reference = randomUUID();
+        const diagnosis = classifyCheckoutError(error);
+        const providerRequestId =
+          getHeader(error?.headers, "x-request-id") ??
+          getHeader(error?.headers, "request-id");
+        console.error(
+          JSON.stringify({
+            event: "dodo_device_checkout_failed",
+            reference,
+            code: diagnosis.code,
+            provider_status: Number.isInteger(error?.status) ? error.status : null,
+            provider_code: diagnosis.providerCode ?? null,
+            provider_request_id:
+              typeof providerRequestId === "string"
+                ? providerRequestId.slice(0, 100)
+                : null,
+            environment: config.environment,
+          }),
+        );
+        return res.status(502).json({
+          error: diagnosis.message,
+          code: diagnosis.code,
+          reference,
+          ...(Number.isInteger(error?.status)
+            ? { provider_status: error.status }
+            : {}),
+          ...(diagnosis.providerCode ? { provider_code: diagnosis.providerCode } : {}),
+        });
       }
     },
   );
@@ -537,6 +942,15 @@ function createApp(options = {}) {
             cancelAtPeriodEnd ? 1 : 0,
             eventTime.toISOString(),
           ],
+        });
+        await tx.execute({
+          sql: `UPDATE device_trials
+                SET pending_mode = NULL,
+                    pending_started_at = NULL,
+                    pending_checkout_url = NULL,
+                    pending_session_id = NULL
+                WHERE account_id = ?`,
+          args: [accountId],
         });
         await tx.commit();
         return res.json({ received: true });
